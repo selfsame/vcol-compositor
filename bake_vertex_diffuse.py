@@ -36,10 +36,6 @@ from math import *
 from bpy_extras.io_utils import axis_conversion
 from datetime import datetime
 
-#from bpy.app.handlers import persistent
-
-
-
 def getGlobalAO(context, vertex, ob, distance, rays):
         pos = ob.matrix_world * vertex.co
         rot = ob.matrix_world.to_3x3()
@@ -52,7 +48,7 @@ def getGlobalAO(context, vertex, ob, distance, rays):
             ray_end_position = ray_start_position + (ray * distance)
                         
             # Cast the ray
-            hit, j, l, hit_position, hit_normal = context.scene.ray_cast(ray_start_position, ray_end_position)
+            hit, hit_position, hit_normal, i, o, m = context.scene.ray_cast(ray_start_position, ray_end_position)
                         
             if hit == False:
                 hits -= 1
@@ -75,7 +71,6 @@ def do_ao(context):
     
     STRENGTH = obj.VBAKE.AO_STRENGTH 
     o_mesh = obj.data
-    #mesh = obj.to_mesh(scene = bpy.context.scene, apply_modifiers = True, settings = 'PREVIEW')
     bm.from_mesh(obj.data)
     color = bm.loops.layers.color["AO"]
     for vert in bm.verts:
@@ -85,11 +80,9 @@ def do_ao(context):
     for vert in bm.verts:
         
         result = getGlobalAO(context,vert, obj, obj.VBAKE.AO_STRENGTH , rays)
-        #print("!"+str(result))
         result = 1-result
         for loop in vert.link_loops:
-                loop[color] = (result, result, result)
-                
+                loop[color] = (result, result, result)     
         # concave = .001
         # convex = .001
         # cave_len = 0
@@ -122,8 +115,6 @@ def do_ao(context):
 
     #bm.to_mesh(obj.data)
     return bm
-
-
 
 def do_magic(context, obj=False):
     ms = datetime.now().microsecond
@@ -165,9 +156,6 @@ def do_magic(context, obj=False):
                     energy = lamp.data.energy
                     lcolor = lamp.data.color
                     lv = lamp.matrix_world.to_quaternion() * Vector((0,0,1))
- 
-
-
                     d = lv.dot(n) * energy
                     if d > 0:
                         final = final + ( (Vector((1,1,1)).xyz*d)/2 + (Vector(lcolor)*d)/2 )
@@ -189,13 +177,10 @@ def do_magic(context, obj=False):
             fc = final * lc
 
             final = (obcolor * emit) + (final * (1-emit))
-
+            obm.faces.ensure_lookup_table()
             obm.faces[find].loops[lind][ocolor] = (final[0], final[1], final[2])
             lind += 1
         find += 1
-    #obm.to_mesh(o_mesh)
-    #context.scene.update()
-    #print("magic: "+str(( datetime.now().microsecond - ms) / 1000))
     return obm
 
 class BakeVertexDiffuse(bpy.types.Operator):
@@ -232,9 +217,6 @@ def mix_vcol(context, bm=False):
             colors.append( bm.loops.layers.color[stack.layer] )
         else:
             colors.append(False)
-
-    
-
     for vert in bm.verts:
         for loop in vert.link_loops:
             sfac = False
@@ -257,10 +239,8 @@ def mix_vcol(context, bm=False):
 
             loop[result_layer] = (oc.x, oc.y, oc.z)
     bm.to_mesh(obj.data)
-    #print("mix complete")
     
 def blend(v1, v2, type, factor=.5):
-
     f = factor
     uf = 1 - factor
     if type == "mix":
@@ -271,7 +251,6 @@ def blend(v1, v2, type, factor=.5):
         return v1*uf - (v1 + v2)*f
     if type == "multiply":
         v4 = v1
-
         return v1*uf + Vector([ v1.x*v2.x, v1.y*v2.y, v1.z*v2.z ])*f
     if type == "darken":
         n = []
@@ -307,7 +286,6 @@ def UPDATE_MIX(self, context):
     obj = context.active_object
     if is_ready(obj):
         mix_vcol(context)
-    #context.scene.update()
     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
         
 def ACTIVATION(self, context):
@@ -419,7 +397,6 @@ class VBAKE_STACK_class(bpy.types.UIList):
         ob = data
         sclass = item
 
-
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.scale_y = 1.25
             row = layout.row() #layout.row().box().row()
@@ -436,9 +413,6 @@ class VBAKE_STACK_class(bpy.types.UIList):
             row.prop(sclass, "mix", text="")
             row = layout.row().split(1)
             row.prop(sclass, "factor", text="")
-            
-
-
 
         # 'GRID' layout type should be as compact as possible (typically a single icon!).
         elif self.layout_type in {'GRID'}:
@@ -467,7 +441,7 @@ class VBAKE_STACK_OT_add(bpy.types.Operator):
                 obj = context.active_object
                 obj.VBAKE_LAYER.add()
                 obj.VBAKE_LAYER_index = len(obj.VBAKE_LAYER)-1
-                UPDATE_MIX(cself,ontext)
+                UPDATE_MIX(self,context)
                 return{'FINISHED'}
             
 class VBAKE_STACK_OT_remove(bpy.types.Operator):
@@ -544,8 +518,6 @@ class RENDER_PT_hello(bpy.types.Panel ):
         layout.active = obj.VBAKE.BAKED
         scene = context.scene
         
-        
-
         row = layout.row()
         col = row.column()
         box = col.box()
@@ -569,26 +541,16 @@ class RENDER_PT_hello(bpy.types.Panel ):
         row = box.row()
         row.label("distance")
         row.prop(obj.VBAKE, "AO_STRENGTH", text="")
-        
-        
         row = layout.row()
         row.label("obColor")
         row.label("mix factor")
         row = layout.row()
         col = row.column()
         rr = col.row()
-        #rr.label("Color")
         rr.prop(context.active_object, "color", text="" )
-
-        
         col = row.column()
         rrr = col.row()
         rrr.prop(obj.VBAKE, "MIX_OBCOLOR", text="")
-        
-        row  = layout.row()
-
-
-        
         row = layout.row()
         sp = row.split(1)
         sp.template_list("VBAKE_STACK_class", "VBAKE_STACK_class_list", obj, 'VBAKE_LAYER', obj, 'VBAKE_LAYER_index', rows=3)
@@ -604,13 +566,6 @@ class RENDER_PT_hello(bpy.types.Panel ):
         row.operator('vbake_stack.add', text="add layer pass", icon="ZOOMIN")
         row.operator('vbake_color.add', text="add color pass", icon="COLOR")
         
-
-            
-            
-
-        
-
-
 def state_changed(scene):
     for obj in bpy.context.scene.objects:
         if obj.is_updated and not obj.is_updated_data:
@@ -622,18 +577,12 @@ def state_changed(scene):
                         obj.VBAKE.CACHE_LOC[0] = obj.location.x
                         obj.VBAKE.CACHE_LOC[1] = obj.location.y
                         obj.VBAKE.CACHE_LOC[2] = obj.location.z
-                    #scene.objects.active = obj
                         print("UPDATE "+obj.name)
                         bpy.ops.bake_vertex_diffuse.bake("INVOKE_DEFAULT")
-                        #do_magic(bpy.context)
-                        #mix_vcol(bpy.context)
                     
 if len(bpy.app.handlers.scene_update_post) > 0:
-
     bpy.app.handlers.scene_update_post.pop()
 bpy.app.handlers.scene_update_post.append(state_changed)
-
-
 
 def register():
     bpy.utils.register_module(__name__)
